@@ -31,11 +31,13 @@ class MinmaxOT_Trainer:
     
 
         ## potential flow
+
         self.potential_flow_x = potential_x
         self.potential_flow_y = potential_y
         self.args = args
 
         ## logging and saving
+
         if self.args.model_variant == 'alternate':
             self.exp_dir = f'experiments/{self.args.source_dist}_{self.args.target_dist}/minmax_alternate/dim_{np.prod(self.args.data_shape)}/num_bins_{self.args.num_bins}/lr_{self.args.learning_rate}'
         elif self.args.model_variant == 'step_through_max':
@@ -58,10 +60,12 @@ class MinmaxOT_Trainer:
                                 format='%(asctime)s - %(levelname)s - %(message)s')
         
         ## source dataset dataloaders
+
         self.dataloader_x = dataset_x
         self.dataloader_y = dataset_y
 
         ## creating test dataset tensors
+
         if (test_x is not None) and (test_y is not None):
             if isinstance(test_x, Dataset):
                 self.test_x = test_x.data
@@ -96,14 +100,14 @@ class MinmaxOT_Trainer:
         return -torch.mean(value1) - torch.mean(value2 - value3) + value4
 
     # inner minimization loop using Adam optimizer
-    def approx_min(self, iter_from, iter_to, optimizer_from):
+    def approx_min(self, iter_from, iter_to, optimizer_to):
 
         for _ in range(self.args.max_inner_iter):
-            optimizer_from.zero_grad()
+            optimizer_to.zero_grad()
             batch_from, batch_to = next(iter_from), next(iter_to)
-            loss_from = self.minimax_loss(inputs_from=batch_from, inputs_to=batch_to)
-            loss_from.backward(inputs = list(self.potential_flow_x.parameters()), create_graph=False)
-            optimizer_from.step()
+            loss = self.minimax_loss(inputs_from=batch_from, inputs_to=batch_to)
+            loss.backward(inputs = list(self.potential_flow_y.parameters()), create_graph=False)
+            optimizer_to.step()
 
     # inner minimization loop using minibatch gradient descent
     def nested_approx_min(self, iter_from, iter_to):
