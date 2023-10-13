@@ -15,9 +15,15 @@ from .linear import (
 )
 
 from .rational_quadratic import (
-    RQspline
+    RQspline,
+    normalize_spline_parameters,
+    gather_inputs, 
+    RQ_bin_integral
 )
 
+from .RQ_integral import(
+    RQintegral
+)
 from .utils import(
     InputOutsideDomain,
     searchsorted,
@@ -26,4 +32,9 @@ from .utils import(
     random_orthogonal,
     is_positive_int,
     is_bool
+)
+
+from .vae import(
+    VAE, AE, 
+    Encoder, Decoder
 )

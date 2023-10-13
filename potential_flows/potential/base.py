@@ -16,7 +16,7 @@ class Potential(nn.Module):
     """Base class for input convex potentials."""
 
     def __init__(self,
-                transform: Union[transforms.Transform, None]):
+                transform: Union[transforms.Transform, None] = None):
 
         super(Potential, self).__init__()
 
@@ -28,7 +28,7 @@ class Potential(nn.Module):
         self.Tmap = transforms.CompositeTransform(transforms_list)
 
 
-    def integral(self, inputs, context=None):
+    def forward(self, inputs, context=None):
         raise NotImplementedError()
 
     def conjugate(self, input, context=None):

@@ -63,7 +63,8 @@ class CompositeTransform(Transform):
         outputs = inputs
 
         for func in funcs:
-            jac = torch.einsum("bij,bjk->bik", func.jacobian(outputs, context), jac)
+            func_jac = func.jacobian(outputs, context)
+            jac = torch.einsum("bij,bjk->bik", func_jac, jac)
             outputs = func(outputs, context)
         return jac
 
@@ -78,6 +79,7 @@ class CompositeTransform(Transform):
     def jacobian(self, inputs, context=None):
         funcs = self._transforms
         return self.jac_cascade(inputs, funcs, context)
+
 
 class InverseTransform(Transform):
     """Creates a transform that is the inverse of a given transform."""
