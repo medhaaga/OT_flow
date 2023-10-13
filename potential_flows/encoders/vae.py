@@ -10,6 +10,10 @@ class Encoder(nn.Module):
     def __init__(self, input_dim, hidden_dim=100, latent_dim=10, device="cpu"):
         super(Encoder, self).__init__()
 
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.latent_dim = latent_dim
+
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(0.2),

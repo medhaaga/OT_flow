@@ -54,9 +54,7 @@ class DualOT_Trainer:
         root = get_exp_dir()
         self.exp_dir = os.path.join(root, f'{self.args.source_dist}_{self.args.target_dist}/dual/dim_{np.prod(self.args.data_shape)}/num_bins_{self.args.num_bins}/lr_{self.args.learning_rate}')
         os.makedirs(self.exp_dir, exist_ok=True)
-        file_list = os.listdir(self.exp_dir)
-        for file in file_list:
-            os.remove(os.path.join(self.exp_dir, file))
+ 
         
         if self.args.verbose:
             logging.basicConfig(level=logging.INFO, 
@@ -443,9 +441,6 @@ class DualEncoder_OT_Trainer:
         ## logging and saving
         self.exp_dir = f'experiments/{self.args.source_dist}_{self.args.target_dist}/dualEncoder/dim_{np.prod(self.args.data_shape)}/num_bins_{self.args.num_bins}/lr_{self.args.learning_rate}'
         os.makedirs(self.exp_dir, exist_ok=True)
-        file_list = os.listdir(self.exp_dir)
-        for file in file_list:
-            os.remove(os.path.join(self.exp_dir, file))
         
         logging.basicConfig(level=logging.INFO, 
                                     handlers=[logging.StreamHandler(), logging.FileHandler(os.path.join(self.exp_dir, 'logger.log'))],
@@ -574,24 +569,23 @@ class DualEncoder_OT_Trainer:
     def plot_losses(self):
         plot_losses_(self.exp_dir, self.args, self.true_potential)
 
-    def learn_decoder(self, input_dim, hidden_dim=100, latent_dim=10, epochs=100, dir="source"):
-        decoder = transforms.Decoder(input_dim=input_dim, hidden_dim=hidden_dim, latent_dim=latent_dim)
-        opt = optim.Adam(decoder.parameters(), lr=self.args.learning_rate)
-        if dir == "source":
-            dataloader = self.dataloader_x
-        else:
-            dataloader = self.dataloader_y
-       
-        for epoch in tqdm(range(epochs)):
-            for batch in dataloader:
-                y = self.encoder_flow.encoder_x(batch)
-                loss = ((batch - decoder(y))**2).sum()
-                opt.zero_grad()
-                loss.backward()
-                opt.step()
-            if epoch % 100 == 0:
-                print(f'Epoch: {epoch}, loss: {loss}')
-        return decoder
+
+    def learn_decoders(self, learning_rate=1e-3, epochs=100):
+
+        decoder_x = transforms.Decoder(input_dim=self.encoder_flow.encoder_x.input_dim, 
+                                        hidden_dim=self.encoder_flow.encoder_x.hidden_dim, 
+                                        latent_dim=self.encoder_flow.encoder_x.latent_dim)
+
+        decoder_y = transforms.Decoder(input_dim=self.encoder_flow.encoder_x.input_dim, 
+                                        hidden_dim=self.encoder_flow.encoder_x.hidden_dim, 
+                                        latent_dim=self.encoder_flow.encoder_x.latent_dim)
+        
+        decoder_x = learn_decoder(decoder_x, self.encoder_flow.encoder_x, self.dataloader_x, 
+                                    learning_rate=learning_rate, epochs=epochs)
+        decoder_y = learn_decoder(decoder_y, self.encoder_flow.encoder_y, self.dataloader_y, 
+                                    learning_rate=learning_rate, epochs=epochs)
+
+        return decoder_x, decoder_y
 
     def generate(self, decoder_x):
 
@@ -665,9 +659,7 @@ class DualPCA_OT_Trainer(DualEncoderDecoder_OT_Trainer):
         ## logging and saving
         self.exp_dir = f'experiments/{self.args.source_dist}_{self.args.target_dist}/dualPCA/dim_{np.prod(self.args.data_shape)}/num_bins_{self.args.num_bins}/lr_{self.args.learning_rate}'
         os.makedirs(self.exp_dir, exist_ok=True)
-        file_list = os.listdir(self.exp_dir)
-        for file in file_list:
-            os.remove(os.path.join(self.exp_dir, file))
+
         
         if self.args.verbose:
             logging.basicConfig(level=logging.INFO, 
@@ -779,9 +771,7 @@ class DualVAE_OT_Trainer(DualEncoderDecoder_OT_Trainer):
         ## logging and saving
         self.exp_dir = f'experiments/{self.args.source_dist}_{self.args.target_dist}/dualVAE/dim_{np.prod(self.args.data_shape)}/num_bins_{self.args.num_bins}/lr_{self.args.learning_rate}'
         os.makedirs(self.exp_dir, exist_ok=True)
-        file_list = os.listdir(self.exp_dir)
-        for file in file_list:
-            os.remove(os.path.join(self.exp_dir, file))
+
         
         if self.args.verbose:
             logging.basicConfig(level=logging.INFO, 
@@ -813,7 +803,6 @@ class DualVAE_OT_Trainer(DualEncoderDecoder_OT_Trainer):
         KLD = - 0.5 * torch.sum(1+ log_var_x - mean_x.pow(2) - log_var_x.exp()) - 0.5 * torch.sum(1+ log_var_y - mean_y.pow(2) - log_var_y.exp())
         return dual_loss + reproduction_loss + KLD
   
-
 
 def plot_losses_(exp_dir, args, true_potential):
 
@@ -849,3 +838,18 @@ def plot_losses_(exp_dir, args, true_potential):
     
     plt.close()
 
+
+def learn_decoder(decoder, encoder, dataloader, learning_rate=1e-3, epochs=1e3):
+    opt = optim.Adam(decoder.parameters(), lr=learning_rate)
+
+    for epoch in tqdm(range(epochs)):
+        for batch in dataloader:
+            y = encoder(batch)
+            loss = ((batch - decoder(y))**2).sum()
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+        if epoch % 100 == 0:
+            print(f'Epoch: {epoch}, loss: {loss}')
+
+    return decoder

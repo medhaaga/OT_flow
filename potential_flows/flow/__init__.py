@@ -9,7 +9,8 @@ from .dual_OT_Trainers import(
     DualEncoderDecoder_OT_Trainer,
     DualPCA_OT_Trainer,
     DualAE_OT_Trainer,
-    DualVAE_OT_Trainer
+    DualVAE_OT_Trainer,
+    DualEncoder_OT_Trainer
 )
 
 from .minmax_OT_Trainers import(

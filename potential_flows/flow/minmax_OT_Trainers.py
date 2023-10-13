@@ -85,13 +85,7 @@ class MinmaxOT_Trainer:
     def get_device(self):
         return 
         
-
-    def objective(self, inputs_from, inputs_to):
-        value1 = self.potential_flow(inputs_from)
-        value2 = self.potential_flow.conjugate(inputs_to)
-        value3 = sum([self.args.regularization*torch.sum(param**2) for param in self.potential_flow.parameters()])
-        return torch.mean(value1) + torch.mean(value2) + value3
-
+        
     def minimax_loss(self, inputs_from, inputs_to):
         n = inputs_from.shape[0]
         from_forward = self.potential_flow_x.gradient(inputs_from)
