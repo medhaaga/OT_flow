@@ -17,8 +17,13 @@ def main():
     set_seed(args)
 
     ## get training and testing dataset
-    dataset_x, dataset_y = get_dataset(args, split="train")
-    test_x, test_y = get_dataset(args, split="test")
+    true_potential = None
+    if args.source_dist == 'custom':
+        dataset_x, dataset_y, true_potential = get_dataset(args, split="train")
+        test_x, test_y, true_potential = get_dataset(args, split="test")
+    else:
+        dataset_x, dataset_y = get_dataset(args, split="train")
+        test_x, test_y = get_dataset(args, split="test")
 
     ## make data loaders for train dataset
     data_loader_X = DataLoader(dataset_x, batch_size=args.batch_size, shuffle=True)
@@ -30,7 +35,7 @@ def main():
     potential_flow_y = potential.ICRQ(tail_bound=args.tail_factor*tail_bound, num_bins=args.num_bins, data_shape=args.data_shape)
 
     ## train
-    OT_Trainer = MinmaxOT_Trainer(potential_flow_x, potential_flow_y, args, dataset_x=data_loader_X, dataset_y=data_loader_Y, test_x=test_x, test_y=test_y)       
+    OT_Trainer = MinmaxOT_Trainer(potential_flow_x, potential_flow_y, args, dataset_x=data_loader_X, dataset_y=data_loader_Y, test_x=test_x, test_y=test_y, true_potential=true_potential)       
     OT_Trainer.learn()
 
 if __name__=='__main__':

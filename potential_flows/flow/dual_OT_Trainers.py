@@ -5,6 +5,7 @@ import argparse
 import warnings
 import torch
 from torch import optim
+import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import pandas as pd
@@ -55,7 +56,9 @@ class DualOT_Trainer:
         self.exp_dir = os.path.join(root, f'{self.args.source_dist}_{self.args.target_dist}/dual/dim_{np.prod(self.args.data_shape)}/num_bins_{self.args.num_bins}/lr_{self.args.learning_rate}')
         os.makedirs(self.exp_dir, exist_ok=True)
  
-        
+        if os.path.exists(os.path.join(self.exp_dir, 'logger.log')):
+            os.remove(os.path.join(self.exp_dir, 'logger.log'))
+
         if self.args.verbose:
             logging.basicConfig(level=logging.INFO, 
                                 handlers=[logging.StreamHandler(), logging.FileHandler(os.path.join(self.exp_dir, 'logger.log'))],
@@ -94,8 +97,12 @@ class DualOT_Trainer:
     def objective(self, inputs_from, inputs_to):
         value1 = self.potential_flow(inputs_from)
         value2 = self.potential_flow.conjugate(inputs_to)
-        value3 = sum([self.args.regularization*torch.sum(param**2) for param in self.potential_flow.parameters()])
-        return torch.mean(value1) + torch.mean(value2) + value3
+
+        if self.args.regularization:
+            value3 = sum([self.args.regularization*torch.sum(param**2) for param in self.potential_flow.parameters()])
+            return torch.mean(value1) + torch.mean(value2) + value3
+
+        return torch.mean(value1) + torch.mean(value2) 
 
 
     def learn(self):
@@ -128,10 +135,8 @@ class DualOT_Trainer:
             ## get source and target data batches
             batch_from, batch_to = next(iter_from), next(iter_to)
 
-            ## calculate loss and gradient norm
+            ## calculate loss 
             loss = self.objective(inputs_from=batch_from, inputs_to=batch_to)
-            grads = torch.autograd.grad(loss, self.potential_flow.parameters(), retain_graph=True)
-            grad_norm = torch.sqrt(sum([torch.sum(grad**2) for grad in grads]))
 
             ## take optimization and scheduler step
             optimizer.zero_grad()
@@ -146,18 +151,20 @@ class DualOT_Trainer:
 
             ## logging
             if (t+1) % self.args.log_interval == 0:
+                
+                with torch.no_grad():
 
-                # calculate test loss
-                test_loss = self.objective(self.test_x, self.test_y)
-                test_loss_list.append(test_loss.item())
+                    # calculate test loss
+                    test_loss = self.objective(self.test_x, self.test_y)
+                    test_loss_list.append(test_loss.item())
 
-                # calculate mse if true potential is known
-                if self.true_potential:
-                    squared_diff = ((self.potential_flow.gradient(self.test_x) - self.true_potential.gradient(self.test_x)).reshape(self.args.test_num_samples,-1))**2
-                    mse = torch.mean(torch.sum(squared_diff, dim=-1))
-                    logs.append({'step': t+1, 'train_loss': loss.item(), 'gradient norm': grad_norm.item(), 'test_loss': test_loss.item(), 'mse': mse.item()}) 
-                else:
-                    logs.append({'step': t+1, 'train_loss': loss.item(), 'gradient norm': grad_norm.item(), 'test_loss': test_loss.item()}) 
+                    # calculate mse if true potential is known
+                    if self.true_potential:
+                        squared_diff = ((self.potential_flow.gradient(self.test_x) - self.true_potential.gradient(self.test_x)).reshape(self.args.test_num_samples,-1))**2
+                        mse = torch.mean(torch.sum(squared_diff, dim=-1))
+                        logs.append({'step': t+1, 'train_loss': loss.item(), 'test_loss': test_loss.item(), 'mse': mse.item()}) 
+                    else:
+                        logs.append({'step': t+1, 'train_loss': loss.item(), 'test_loss': test_loss.item()}) 
 
                 
                 with open(self.exp_dir+"/training_metrics.json", "w") as json_file:
@@ -188,11 +195,11 @@ class DualOT_Trainer:
         X_pred = self.potential_flow.gradient_inv(self.test_y).detach().numpy()
 
         fig, axs = plt.subplots(1, 3, figsize=(10,3))
-        axs[0].scatter(self.test_x[:,0], self.test_x[:,1], color='C1', alpha=0.5)
+        axs[0].scatter(self.test_x[:,0], self.test_x[:,1], color='darkgreen', alpha=0.5, s=10)
         axs[0].set_title(r'$X$')
-        axs[1].scatter(self.test_y[:,0], self.test_y[:,1], color='C2', alpha=0.5)
+        axs[1].scatter(self.test_y[:,0], self.test_y[:,1], color='goldenrod', alpha=0.5, s=10)
         axs[1].set_title(r'$Y$')
-        axs[2].scatter(X_pred[:,0], X_pred[:,1], color='C3', alpha=0.5)
+        axs[2].scatter(X_pred[:,0], X_pred[:,1], color='seagreen', alpha=0.5, s=10)
         axs[2].set_title(r'$(\nabla f)^{-1}(Y)$')
 
         if self.args.show_the_plot:
@@ -316,10 +323,7 @@ class DualEncoderDecoder_OT_Trainer:
 
             ## calculate loss 
             loss = self.objective(x=batch_from, y=batch_to)
-            grads = torch.autograd.grad(loss, self.encoder_flow.parameters(), retain_graph=True)
-            grad_norm = torch.sqrt(sum([torch.sum(grad**2) for grad in grads]))
-        
-
+            
             ## delete gradients
             self.encoder_flow.zero_grad()
         
@@ -343,7 +347,7 @@ class DualEncoderDecoder_OT_Trainer:
                     test_loss = self.objective(self.test_x, self.test_y)
                     test_loss_list.append(test_loss.item())
 
-                    logs.append({'step': t+1, 'train_loss': loss.item(), 'grad norm': grad_norm.item(),  'test_loss': test_loss.item()}) 
+                    logs.append({'step': t+1, 'train_loss': loss.item(),  'test_loss': test_loss.item()}) 
 
                 
                 with open(self.exp_dir+"/training_metrics.json", "w") as json_file:
@@ -375,11 +379,11 @@ class DualEncoderDecoder_OT_Trainer:
             x_pred = self.encoder_flow.decode_x(self.encoder_flow.potential.gradient_inv(self.encoder_flow.encode_y(self.test_y)))
 
         fig, axs = plt.subplots(1, 3, figsize=(10,3))
-        axs[0].scatter(self.test_x[:,0], self.test_x[:,1], color='C1', alpha=0.5)
+        axs[0].scatter(self.test_x[:,0], self.test_x[:,1], color='darkgreen', alpha=0.5)
         axs[0].set_title(r'$X$')
-        axs[1].scatter(self.test_y[:,0], self.test_y[:,1], color='C2', alpha=0.5)
+        axs[1].scatter(self.test_y[:,0], self.test_y[:,1], color='goldenrod', alpha=0.5)
         axs[1].set_title(r'$Y$')
-        axs[2].scatter(x_pred[:,0], x_pred[:,1], color='C3', alpha=0.5)
+        axs[2].scatter(x_pred[:,0], x_pred[:,1], color='seagreen', alpha=0.5)
         axs[2].set_title(r'$(\nabla f)^{-1}(Y)$')
 
         if self.args.show_the_plot:
@@ -442,10 +446,16 @@ class DualEncoder_OT_Trainer:
         self.exp_dir = f'experiments/{self.args.source_dist}_{self.args.target_dist}/dualEncoder/dim_{np.prod(self.args.data_shape)}/num_bins_{self.args.num_bins}/lr_{self.args.learning_rate}'
         os.makedirs(self.exp_dir, exist_ok=True)
         
-        logging.basicConfig(level=logging.INFO, 
-                                    handlers=[logging.StreamHandler(), logging.FileHandler(os.path.join(self.exp_dir, 'logger.log'))],
-                                    format='%(asctime)s - %(levelname)s - %(message)s')
+        if self.args.verbose:
+            logging.basicConfig(level=logging.INFO, 
+                                handlers=[logging.StreamHandler(), logging.FileHandler(os.path.join(self.exp_dir, 'logger.log'))],
+                                format='%(asctime)s - %(levelname)s - %(message)s')
+        else:
+            logging.basicConfig(level=logging.INFO, 
+                                handlers=[logging.FileHandler(os.path.join(self.exp_dir, 'logger.log'))],
+                                format='%(asctime)s - %(levelname)s - %(message)s')
         
+     
         ## source dataset dataloaders
         self.dataloader_x = dataset_x
         self.dataloader_y = dataset_y
@@ -482,10 +492,11 @@ class DualEncoder_OT_Trainer:
         ## dual loss on encoded data
         value1 = self.encoder_flow.potential(T_x)
         value2 = self.encoder_flow.potential.conjugate(T_y)
-        value3 = sum([self.args.regularization*torch.sum(param**2) for param in self.encoder_flow.potential.parameters()])
-        dual_loss = torch.mean(value1) + torch.mean(value2) + value3
+        if self.args.regularization:
+            value3 = sum([self.args.regularization*torch.sum(param**2) for param in self.encoder_flow.potential.parameters()])
+            return torch.mean(value1) + torch.mean(value2) + value3
 
-        return dual_loss 
+        return torch.mean(value1) + torch.mean(value2) 
 
 
     def learn(self):
@@ -521,12 +532,9 @@ class DualEncoder_OT_Trainer:
 
             ## calculate loss 
             loss = self.objective(x=batch_from, y=batch_to)
-            grads = torch.autograd.grad(loss, self.encoder_flow.parameters(), retain_graph=True)
-            grad_norm = torch.sqrt(sum([torch.sum(grad**2) for grad in grads]))
-        
 
             ## delete gradients
-            self.encoder_flow.zero_grad()
+            # self.encoder_flow.zero_grad()
         
             ## take optimization and scheduler step
             optimizer.zero_grad()
@@ -544,7 +552,7 @@ class DualEncoder_OT_Trainer:
                     test_loss = self.objective(self.test_x, self.test_y)
                     test_loss_list.append(test_loss.item())
 
-                    logs.append({'step': t+1, 'train_loss': loss.item(), 'grad norm': grad_norm.item(),  'test_loss': test_loss.item()}) 
+                    logs.append({'step': t+1, 'train_loss': loss.item(), 'test_loss': test_loss.item()}) 
 
                 
                 with open(self.exp_dir+"/training_metrics.json", "w") as json_file:
@@ -580,12 +588,12 @@ class DualEncoder_OT_Trainer:
                                         hidden_dim=self.encoder_flow.encoder_x.hidden_dim, 
                                         latent_dim=self.encoder_flow.encoder_x.latent_dim)
         
-        decoder_x = learn_decoder(decoder_x, self.encoder_flow.encoder_x, self.dataloader_x, 
+        decoder_x, losses_x = learn_decoder(decoder_x, self.encoder_flow.encoder_x, self.dataloader_x, 
                                     learning_rate=learning_rate, epochs=epochs)
-        decoder_y = learn_decoder(decoder_y, self.encoder_flow.encoder_y, self.dataloader_y, 
+        decoder_y, losses_y = learn_decoder(decoder_y, self.encoder_flow.encoder_y, self.dataloader_y, 
                                     learning_rate=learning_rate, epochs=epochs)
 
-        return decoder_x, decoder_y
+        return decoder_x, decoder_y, losses_x, losses_y
 
     def generate(self, decoder_x):
 
@@ -594,11 +602,11 @@ class DualEncoder_OT_Trainer:
             x_pred = decoder_x(self.encoder_flow.potential.gradient_inv(self.encoder_flow.encode_y(self.test_y)))
 
         fig, axs = plt.subplots(1, 3, figsize=(10,3))
-        axs[0].scatter(self.test_x[:,0], self.test_x[:,1], color='C1', alpha=0.5)
+        axs[0].scatter(self.test_x[:,0], self.test_x[:,1], color='darkgreen', alpha=0.5)
         axs[0].set_title(r'$X$')
-        axs[1].scatter(self.test_y[:,0], self.test_y[:,1], color='C2', alpha=0.5)
+        axs[1].scatter(self.test_y[:,0], self.test_y[:,1], color='goldenrod', alpha=0.5)
         axs[1].set_title(r'$Y$')
-        axs[2].scatter(x_pred[:,0], x_pred[:,1], color='C3', alpha=0.5)
+        axs[2].scatter(x_pred[:,0], x_pred[:,1], color='seagreen', alpha=0.5)
         axs[2].set_title(r'$(\nabla f)^{-1}(Y)$')
 
         if self.args.show_the_plot:
@@ -704,9 +712,7 @@ class DualAE_OT_Trainer(DualEncoderDecoder_OT_Trainer):
         ## logging and saving
         self.exp_dir = f'experiments/{self.args.source_dist}_{self.args.target_dist}/dualAE/dim_{np.prod(self.args.data_shape)}/num_bins_{self.args.num_bins}/lr_{self.args.learning_rate}'
         os.makedirs(self.exp_dir, exist_ok=True)
-        file_list = os.listdir(self.exp_dir)
-        for file in file_list:
-            os.remove(os.path.join(self.exp_dir, file))
+
         
         if self.args.verbose:
             logging.basicConfig(level=logging.INFO, 
@@ -841,15 +847,15 @@ def plot_losses_(exp_dir, args, true_potential):
 
 def learn_decoder(decoder, encoder, dataloader, learning_rate=1e-3, epochs=1e3):
     opt = optim.Adam(decoder.parameters(), lr=learning_rate)
-
+    criterion = nn.MSELoss()
+    losses = []
     for epoch in tqdm(range(epochs)):
         for batch in dataloader:
             y = encoder(batch)
-            loss = ((batch - decoder(y))**2).sum()
+            loss = criterion(batch, decoder(y))
             opt.zero_grad()
             loss.backward()
             opt.step()
-        if epoch % 100 == 0:
-            print(f'Epoch: {epoch}, loss: {loss}')
+        losses.append(loss.item())
 
-    return decoder
+    return decoder, losses

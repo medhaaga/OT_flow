@@ -14,14 +14,18 @@ def get_parser():
                         help='Name of source dataset to use.')     
     parser.add_argument('--target_dist', type=str, default='gaussian',
                         help='target distribution name')
-    parser.add_argument('--data_shape', type=tuple, default=(2,))           
-    parser.add_argument('--num_samples', type=int, default=2000,
+    parser.add_argument('--data_shape', type=tuple, default=(2,))     
+    parser.add_argument('--latent_dim', type=int, default=10,
+                        help='latent dimensions if using encoders.')
+    parser.add_argument('--hidden_dim', type=int, default=512,
+                        help='hidden dimensions if using encoders.')      
+    parser.add_argument('--num_samples', type=int, default=10000,
                         help='number of samples.')
-    parser.add_argument('--test_num_samples', type=int, default=500,
+    parser.add_argument('--test_num_samples', type=int, default=2048,
                         help='number of test samples')
-    parser.add_argument('--batch_size', type=int, default=512,
+    parser.add_argument('--batch_size', type=int, default=1024,
                         help='Size of batch used for training.')
-    parser.add_argument('--regularization', type=float, default=1e-5,
+    parser.add_argument('--regularization', type=float, default=0.0,
                         help='Size of batch used for training.')
 
     # optimization
@@ -38,20 +42,20 @@ def get_parser():
                         help='Value by which to clip norm of gradients.')
     parser.add_argument('--preload', type=int, default=0,
                         help='Do you want to preload a model or train from scratch?')
-    parser.add_argument('--tolerance', type=float, default=0.0005,
+    parser.add_argument('--tolerance', type=float, default=0.0001,
                         help='tolerance for optimization algo')
 
     # flow details
     parser.add_argument('--num_bins', type=int, default=4,
                         help='Number of bins to use for piecewise transforms.')
-    parser.add_argument('--tail_factor', type=float, default=1.5,
+    parser.add_argument('--tail_factor', type=float, default=1.0,
                         help='Factor times the max input value is tail bound.')
     parser.add_argument('--normalization', type=str, default='softplus',
                         help='method for normalizing the bin widths and heights.')
 
 
     # logging and checkpoints
-    parser.add_argument('--log_interval', type=int, default=100,
+    parser.add_argument('--log_interval', type=int, default=50,
                         help='Interval in steps at which to report training stats.')
     parser.add_argument('--verbose', type=bool, default=True,
                         help='Print logs in shell?')

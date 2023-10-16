@@ -4,6 +4,8 @@ import sys
 # sys.path.append('/home/medhaaga/nsf')
 import torch
 from torch.utils.data import Dataset
+from torchvision import transforms
+from torchvision.datasets import MNIST
 from potential_flows import potential
 
 
@@ -323,6 +325,37 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         return self.num_points
+
+
+class CustomMNISTDataset(Dataset):
+    def __init__(self, root, train=True, transform=transforms.Compose([transforms.Resize(28), transforms.ToTensor()])):
+        self.mnist = MNIST(root=root, train=train, download=True, transform=transform)
+        
+        # Compute mean and standard deviation from the dataset for normalization
+        
+        self.data = self.mnist.data.view(self.mnist.data.shape[0], -1)/255
+        self.mean, self.std = self.data.mean(0), self.data.std(0)
+        self.data = self.data - self.mean
+
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.mnist)
+
+    def __getitem__(self, idx):
+
+        return self.data[idx]
+
+
+    def inverse_transform(self, image_vectorized):
+        # Reverse the normalization
+        image_unnormalized = image_vectorized  + self.mean
+        image_unnormalized = image_unnormalized*255
+        
+        # Reshape the flattened tensor back to the original image size (28x28)
+        original_image = image_unnormalized.view(-1, 28, 28)
+        return original_image
+
 
 def create_custom_dataset(n):
     d = 2
