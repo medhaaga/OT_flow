@@ -100,14 +100,14 @@ class MinmaxOT_Trainer:
         return -torch.mean(value1) - torch.mean(value2 - value3) + value4
 
     # inner minimization loop using Adam optimizer
-    def approx_min(self, iter_from, iter_to, optimizer_to):
+    def approx_min(self, iter_from, iter_to, optimizer_from):
 
         for _ in range(self.args.max_inner_iter):
-            optimizer_to.zero_grad()
+            optimizer_from.zero_grad()
             batch_from, batch_to = next(iter_from), next(iter_to)
             loss = self.minimax_loss(inputs_from=batch_from, inputs_to=batch_to)
-            loss.backward(inputs = list(self.potential_flow_y.parameters()), create_graph=False)
-            optimizer_to.step()
+            loss.backward(inputs = list(self.potential_flow_x.parameters()), create_graph=False)
+            optimizer_from.step()
 
     # inner minimization loop using minibatch gradient descent
     def nested_approx_min(self, iter_from, iter_to):
@@ -228,7 +228,7 @@ class MinmaxOT_Trainer:
         ## transport the test dataset
 
         with torch.no_grad():
-            X_pred = self.potential_flow_x.gradient_inv(self.test_y).detach().numpy()
+            X_pred = self.potential_flow_y.gradient(self.test_y).detach().numpy()
 
         fig, axs = plt.subplots(1, 3, figsize=(10,3))
         axs[0].scatter(self.test_x[:,0], self.test_x[:,1], color='C1', alpha=0.5)
