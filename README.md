@@ -7,7 +7,7 @@ Potential flows can be used to parameterize a $\mathbb{R}^d \to \mathbb{R}$ conv
 1. Solving the Kantorovich semi-dual problem directly.
 2. Solving the saddlepoint optimization problem that approximates Kantorovich semi-dual problem.
 
-The ICRQ spline-based parameterization for potential flows garners diagonal transport maps. The source and target data can be encoded to a smaller dimensional latent space to capture the correlation structure in the data and handle high dimensional examples.
+Our ICRQ spline-based parameterization for potential flows estimates any diagonal optimal transport map by directly solving the semi-dual objective. The source and target data can be encoded to a smaller dimensional latent space to capture the correlation structure in the data and handle high dimensional examples.
 
 * `~/data/datasets` contains all planar datasets considered for benchmarking.
 * `~/transforms` contains all monotonic $\mathbb{R}^d \to \mathbb{R}^d$ transformations.
