@@ -62,9 +62,9 @@ class ICRQ(potential.Potential):
             raise TypeError
 
         self.num_bins = num_bins
-        self.widths = nn.Parameter(torch.randn(*data_shape, self.num_bins))
-        self.heights = nn.Parameter(torch.randn(*data_shape, self.num_bins))
-        self.derivatives = nn.Parameter(torch.randn(*data_shape, self.num_bins+1))
+        self.widths = nn.Parameter(torch.ones(*data_shape, self.num_bins))
+        self.heights = nn.Parameter(torch.ones(*data_shape, self.num_bins))
+        self.derivatives = nn.Parameter(torch.ones(*data_shape, self.num_bins+1))
         self.normalization = normalization
         self.tail_bound = tail_bound
         self.min_bin_width = min_bin_width

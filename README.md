@@ -1,13 +1,13 @@
 # Brenier Potential Flow
 
-This repository implements potential flows parameterized using input convex rational quadratic (ICRQ) splines. Potential flows are a flow-based architecture for Brenier potentials that provide the Brenier map (optimal transport map) between two absolutely continuous measures.
+This repository implements potential flows parameterized using input convex rational quadratic (ICRQ) splines. Potential flows are a flow-based architecture for estimating Brenier potential functions. The optimal transport map, aka Brenier map, between two absolutely continuous measures is obtained as the derivative of the estimated Brenier potential.
 
 Potential flows can be used to parameterize a $\mathbb{R}^d \to \mathbb{R}$ convex function. Two different methods for learning the Brenier optimal (Brenier map equivalently) have been considered:
 
 1. Solving the Kantorovich semi-dual problem directly.
 2. Solving the saddlepoint optimization problem that approximates Kantorovich semi-dual problem.
 
-The ICRQ spline-based parameterization for potential flows garners diagonal transport maps. The source and target data can be encoded to a smaller dimensional latent space to capture the correlation structure in the data and handle high dimensional examples.
+Our ICRQ spline-based parameterization for potential flows estimates any diagonal optimal transport map by directly solving the semi-dual objective. The source and target data can be encoded to a smaller dimensional latent space to capture the correlation structure in the data and to handle high dimensional examples.
 
 * `~/data/datasets` contains all planar datasets considered for benchmarking.
 * `~/transforms` contains all monotonic $\mathbb{R}^d \to \mathbb{R}^d$ transformations.

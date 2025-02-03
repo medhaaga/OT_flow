@@ -17,13 +17,15 @@ def main():
 
     ## get training and testing dataset
     true_potential = None
-    if args.source_dist == 'custom':
-        dataset_x, dataset_y, true_potential = data.get_dataset(args, split="train")
-        test_x, test_y, true_potential = data.get_dataset(args, split="test")
-    else:
-        dataset_x, dataset_y = data.get_dataset(args, split="train")
-        test_x, test_y = data.get_dataset(args, split="test")
+    args.source_dist = 'mnist'
+    args.data_shape = (784,)
 
+    ## loda dataset
+    dataset_x = data.CustomMNISTDataset(root='../data/MNIST_data/', train=True)
+    dataset_y = data.Gaussian(n=len(dataset_x), d=(784,))
+    test_x = data.CustomMNISTDataset(root='./MNIST_data/', train=False)
+    test_y = data.Gaussian(n=len(dataset_y), d=(784,))
+    
     ## make data loaders for train dataset
     data_loader_X = DataLoader(dataset_x, batch_size=args.batch_size, shuffle=True)
     data_loader_Y = DataLoader(dataset_y, batch_size=args.batch_size, shuffle=True)    

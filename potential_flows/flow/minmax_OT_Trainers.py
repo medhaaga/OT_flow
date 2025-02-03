@@ -46,9 +46,11 @@ class MinmaxOT_Trainer:
             NotImplementedError
 
         os.makedirs(self.exp_dir, exist_ok=True)
-        file_list = os.listdir(self.exp_dir)
-        for file in file_list:
-            os.remove(os.path.join(self.exp_dir, file))
+
+        # remove tye log file if it exists already
+    
+        if os.path.exists(os.path.join(self.exp_dir, 'logger.log')):
+            os.remove(os.path.join(self.exp_dir, 'logger.log'))
         
         if self.args.verbose:
             logging.basicConfig(level=logging.INFO, 
@@ -58,6 +60,7 @@ class MinmaxOT_Trainer:
             logging.basicConfig(level=logging.INFO, 
                                 handlers=[logging.FileHandler(os.path.join(self.exp_dir, 'logger.log'))],
                                 format='%(asctime)s - %(levelname)s - %(message)s')
+
         
         ## source dataset dataloaders
 
@@ -88,17 +91,36 @@ class MinmaxOT_Trainer:
 
     def get_device(self):
         return 
-        
+
+    def from_loss(self, inputs_from, inputs_to):
+        n = inputs_from.shape[0]
+        from_forward = self.potential_flow_x.gradient(inputs_from)
+        g_grad_fx = torch.mean(self.potential_flow_y(from_forward).view(n,-1))
+        x_dot_grad_fx = torch.mean(inputs_from.view(n,-1) * from_forward.view(n,-1))
+
+        if self.args.regularization:
+            return g_grad_fx - x_dot_grad_fx + sum([self.args.regularization*torch.sum(param**2) for param in self.potential_flow_x.parameters()])
+        return g_grad_fx - x_dot_grad_fx
+
+    def to_loss(self, inputs_from, inputs_to):
+        n = inputs_from.shape[0]
+        from_forward = self.potential_flow_x.gradient(inputs_from)
+        gy = torch.mean(self.potential_flow_y(inputs_to).view(n,-1))
+        g_grad_fx = torch.mean(self.potential_flow_y(from_forward).view(n,-1))
+
+        if self.args.regularization:
+            return gy - g_grad_fx + sum([self.args.regularization*torch.sum(param**2) for param in self.potential_flow_y.parameters()])
+        return gy - g_grad_fx
         
     def minimax_loss(self, inputs_from, inputs_to):
+
         n = inputs_from.shape[0]
         from_forward = self.potential_flow_x.gradient(inputs_from)
         value1 = self.potential_flow_y(inputs_to).view(n,-1)
         value2 = inputs_from.view(n,-1) * from_forward.view(n,-1)
         value3 = self.potential_flow_y(from_forward).view(n,-1)
-        value4 = sum([self.args.regularization*torch.sum(param**2) for param in self.potential_flow_x.parameters()]) - sum([self.args.regularization*torch.sum(param**2) for param in self.potential_flow_y.parameters()])
-        return -torch.mean(value1) - torch.mean(value2 - value3) + value4
 
+<<<<<<< HEAD
     # inner minimization loop using Adam optimizer
     def approx_min(self, iter_from, iter_to, optimizer_from):
 
@@ -106,6 +128,22 @@ class MinmaxOT_Trainer:
             optimizer_from.zero_grad()
             batch_from, batch_to = next(iter_from), next(iter_to)
             loss = self.minimax_loss(inputs_from=batch_from, inputs_to=batch_to)
+=======
+        if self.args.regularization:
+            value4 = sum([self.args.regularization*torch.sum(param**2) for param in self.potential_flow_x.parameters()]) - sum([self.args.regularization*torch.sum(param**2) for param in self.potential_flow_y.parameters()])
+            return -torch.mean(value1) - torch.mean(value2 - value3) + value4
+        else:
+            return -torch.mean(value1) - torch.mean(value2 - value3) 
+
+    # inner minimization loop using Adam optimizer for minimizing over f
+    def approx_min(self, iter_from, iter_to, optimizer_from):
+
+        for _ in range(self.args.max_inner_iter):
+
+            optimizer_from.zero_grad()
+            batch_from, batch_to = next(iter_from), next(iter_to)
+            loss = self.from_loss(inputs_from=batch_from, inputs_to=batch_to)
+>>>>>>> 368995cc8faaf3b55343417ed0e1ccd6892e0730
             loss.backward(inputs = list(self.potential_flow_x.parameters()), create_graph=False)
             optimizer_from.step()
 
@@ -135,7 +173,9 @@ class MinmaxOT_Trainer:
 
         # create optimizer
         optimizer_from = optim.Adam(self.potential_flow_x.parameters(), lr=self.args.learning_rate)
-        optimizer_to = optim.Adam(self.potential_flow_y.parameters(), lr=self.args.learning_rate, maximize=True)
+        optimizer_to = optim.Adam(self.potential_flow_y.parameters(), lr=self.args.learning_rate)
+
+        # create scheduler
         if self.args.anneal_learning_rate == 'cosine':
             scheduler_to = optim.lr_scheduler.CosineAnnealingLR(optimizer_to, self.args.num_epochs, 1e-4)
         elif self.args.anneal_learning_rate == 'exponential':
@@ -156,21 +196,23 @@ class MinmaxOT_Trainer:
 
             ## calculate loss and gradient norm
             loss = self.minimax_loss(inputs_from=batch_from, inputs_to=batch_to)
-            grads_x = torch.autograd.grad(loss, self.potential_flow_x.parameters(), retain_graph=True)
-            grads_y = torch.autograd.grad(loss, self.potential_flow_y.parameters(), retain_graph=True)
-            grad_norm = torch.sqrt(sum([torch.sum(grad**2) for grad in grads_x]) + sum([torch.sum(grad**2) for grad in grads_y]))
-
+            
             ## delete the parameter gradients
-            for (param_from, param_to) in zip(self.potential_flow_x.parameters(), self.potential_flow_y.parameters()):
-                param_from.grad, param_to.grad = None, None
+            # for (param_from, param_to) in zip(self.potential_flow_x.parameters(), self.potential_flow_y.parameters()):
+            #     param_from.grad, param_to.grad = None, None
     
             ## take optimization and scheduler step
             if self.args.model_variant == "alternate":
+
+                # update f
                 self.approx_min(iter_from, iter_to, optimizer_from)
+
+                # update g
                 optimizer_to.zero_grad()
-                loss_to = self.minimax_loss(inputs_from=batch_from, inputs_to=batch_to)
+                loss_to = self.to_loss(inputs_from=batch_from, inputs_to=batch_to)
                 loss_to.backward(inputs = list(self.potential_flow_y.parameters()))
                 optimizer_to.step()
+
                 if self.args.anneal_learning_rate != 'none':
                     scheduler_to.step()
 
@@ -197,9 +239,9 @@ class MinmaxOT_Trainer:
                 if self.true_potential:
                     squared_diff = ((self.potential_flow_x.gradient(self.test_x) - self.true_potential.gradient(self.test_x)).reshape(self.args.test_num_samples,-1))**2
                     mse = torch.mean(torch.sum(squared_diff, dim=-1))
-                    logs.append({'step': t+1, 'train_loss': loss.item(), 'gradient norm': grad_norm.item(), 'test_loss': test_loss.item(), 'mse': mse.item()}) 
+                    logs.append({'step': t+1, 'train_loss': loss.item(), 'test_loss': test_loss.item(), 'mse': mse.item()}) 
                 else:
-                    logs.append({'step': t+1, 'train_loss': loss.item(), 'gradient norm': grad_norm.item(), 'test_loss': test_loss.item()}) 
+                    logs.append({'step': t+1, 'train_loss': loss.item(), 'test_loss': test_loss.item()}) 
 
                 
                 with open(self.exp_dir+"/training_metrics.json", "w") as json_file:
@@ -231,11 +273,11 @@ class MinmaxOT_Trainer:
             X_pred = self.potential_flow_y.gradient(self.test_y).detach().numpy()
 
         fig, axs = plt.subplots(1, 3, figsize=(10,3))
-        axs[0].scatter(self.test_x[:,0], self.test_x[:,1], color='C1', alpha=0.5)
+        axs[0].scatter(self.test_x[:,0], self.test_x[:,1], color='darkgreen', alpha=0.5, s=10)
         axs[0].set_title(r'$X$')
-        axs[1].scatter(self.test_y[:,0], self.test_y[:,1], color='C2', alpha=0.5)
+        axs[1].scatter(self.test_y[:,0], self.test_y[:,1], color='goldenrod', alpha=0.5, s=10)
         axs[1].set_title(r'$Y$')
-        axs[2].scatter(X_pred[:,0], X_pred[:,1], color='C3', alpha=0.5)
+        axs[2].scatter(X_pred[:,0], X_pred[:,1], color='seagreen', alpha=0.5, s=10)
         axs[2].set_title(r'$(\nabla f)^{-1}(Y)$')
 
         if self.args.show_the_plot:
